@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
@@ -121,13 +122,12 @@ func defaultURL(u *url.URL, d *url.URL) *url.URL {
 
 // OIDCClaims is a struct to unmarshal the OIDC claims from an ID Token payload
 type OIDCClaims struct {
-	Subject      string   `json:"sub"`
-	Email        string   `json:"-"`
-	Groups       []string `json:"-"`
-	Verified     *bool    `json:"email_verified"`
-	Nonce        string   `json:"nonce"`
-	SessionState string   `json:"session_state"`
-	Sid          string   `json:"sid"`
+	Subject  string   `json:"sub"`
+	Email    string   `json:"-"`
+	Groups   []string `json:"-"`
+	Verified *bool    `json:"email_verified"`
+	Nonce    string   `json:"nonce"`
+	Sid      string   `json:"sid"`
 
 	raw map[string]interface{}
 }
@@ -256,24 +256,24 @@ func (p *ProviderData) extractGroups(claims map[string]interface{}) []string {
 	return groups
 }
 
-func (p *ProviderData) getOIDCBackchannelSignOutKey(req *http.Request) (string, error) {
+func (p *ProviderData) validateLogoutToken(req *http.Request) (string, string, *time.Time, error) {
 	err := req.ParseForm()
 	if err != nil {
-		return "", fmt.Errorf("couldn't parse backchannel sign out request form: %v", err)
+		return "", "", nil, fmt.Errorf("couldn't parse backchannel sign out request form: %v", err)
 	}
 
 	logoutTokenRaw := req.Form.Get("logout_token")
 	if logoutTokenRaw == "" {
-		return "", errors.New("logout_token form field not in backchannel sign out request")
+		return "", "", nil, errors.New("logout_token form field not in backchannel sign out request")
 	}
 
 	if p.LogoutTokenVerifier == nil {
-		return "", ErrMissingOIDCVerifier
+		return "", "", nil, ErrMissingOIDCVerifier
 	}
 
 	logoutToken, err := p.LogoutTokenVerifier.Verify(req.Context(), logoutTokenRaw)
 	if err != nil {
-		return "", fmt.Errorf("logout_token verification failed: %v", err)
+		return "", "", nil, fmt.Errorf("logout_token verification failed: %v", err)
 	}
 
 	// TODO verify logout token more
@@ -283,16 +283,12 @@ func (p *ProviderData) getOIDCBackchannelSignOutKey(req *http.Request) (string, 
 		Sid string `json:"sid"`
 	}
 	if err := logoutToken.Claims(&claims); err != nil {
-		return "", fmt.Errorf("logout_token unmarshaling failed: %v", err)
+		return "", "", nil, fmt.Errorf("logout_token unmarshaling failed: %v", err)
 	}
 
-	// If a session ID was provided, use that as the basis of the sign out key
-	// for this request
-	if claims.Sid != "" {
-		return claims.Sid, nil
+	if logoutToken.Subject == "" && claims.Sid == "" {
+		return "", "", nil, errors.New("logout token did not contain `sid` or `sub` claims")
 	}
 
-	// TODO How do we support sign out by "sub"?
-
-	return "", errors.New("logout token did not contain `sid` or `sub` claims")
+	return logoutToken.Subject, claims.Sid, &logoutToken.IssuedAt, nil
 }

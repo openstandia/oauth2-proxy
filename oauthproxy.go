@@ -670,8 +670,8 @@ func (p *OAuthProxy) BackchannelSignOut(rw http.ResponseWriter, req *http.Reques
 	rw.Header().Set("Cache-Control", "no-cache, no-store")
 	rw.Header().Set("Pragma", "no-cache")
 
-	// Query our provider to extract the sign out key from the request body
-	signOutKey, err := p.provider.GetBackchannelSignOutKey(req)
+	// Call our provider to validate and extract the logout token from the request body
+	sub, sid, iat, err := p.provider.ValidateLogoutToken(req)
 	if err != nil {
 		// If the request was invalid, return 400 Bad Request
 		logger.Errorf("Backchannel sign out request invalid: %v", err)
@@ -679,25 +679,37 @@ func (p *OAuthProxy) BackchannelSignOut(rw http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	ticketID := fmt.Sprintf("%s-%s", p.CookieOptions.Name, signOutKey)
+	logger.Printf("Do BackchannelSignOut: %s, %s, %v\n", sub, sid, iat)
 
-	// Attempt to perform the sign out in our session cache
-	err = p.BackchannelSignOutSession(req, ticketID)
-	if err != nil {
-		// If an error occurred during sign out, return 501 Not Implemented
-		logger.Errorf("Error performing backchannel sign out: %v", err)
-		p.ErrorPage(rw, req, http.StatusNotImplemented, err.Error())
-		return
+	// Sign out by sid
+	if sid != "" {
+		ticketID := fmt.Sprintf("%s-%s", p.CookieOptions.Name, sid)
+		// Attempt to perform the sign out in our session cache
+		err = p.sessionStore.ClearSignOutKey(req, ticketID)
+		if err != nil {
+			// If an error occurred during sign out, return 501 Not Implemented
+			logger.Errorf("Error performing backchannel sign out by sid: %v", err)
+			p.ErrorPage(rw, req, http.StatusNotImplemented, err.Error())
+			return
+		}
+	}
+
+	// Sign out by sub
+	if sub != "" {
+		err = p.sessionStore.AddSignedOutUser(req, &sessionsapi.SignedOutState{
+			Sub:      sub,
+			IssuedAt: iat,
+		})
+		if err != nil {
+			// If an error occurred during sign out, return 501 Not Implemented
+			logger.Errorf("Error performing backchannel sign out by sub: %v", err)
+			p.ErrorPage(rw, req, http.StatusNotImplemented, err.Error())
+			return
+		}
 	}
 
 	// If sign out was successful, return 200 OK
 	rw.WriteHeader(http.StatusOK)
-}
-
-// BackchannelSignOutSession uses the sign out key in the backchannel request to
-// clear all matching sessions in the session store
-func (p *OAuthProxy) BackchannelSignOutSession(req *http.Request, signOutKey string) error {
-	return p.sessionStore.ClearSignOutKey(req, signOutKey)
 }
 
 // OAuthStart starts the OAuth2 authentication flow

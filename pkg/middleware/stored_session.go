@@ -99,6 +99,15 @@ func (s *storedSessionLoader) getValidatedSession(rw http.ResponseWriter, req *h
 		return nil, nil
 	}
 
+	// TODO: Optional
+	// Check signed out session state
+	if signedOut, err := s.store.LoadSignedOutUser(req, session.User); err == nil {
+		if session.CreatedAt.Before(*signedOut.IssuedAt) {
+			logger.Printf("Discard session before %v due to single sign out by sub - User: %s", signedOut.IssuedAt, session.User)
+			return nil, fmt.Errorf("the user is marked as signed out state (%s)", session.User)
+		}
+	}
+
 	err = s.refreshSessionIfNeeded(rw, req, session)
 	if err != nil {
 		return nil, fmt.Errorf("error refreshing access token for session (%s): %v", session, err)

@@ -568,3 +568,11 @@ func (f *fakeSessionStore) Clear(rw http.ResponseWriter, req *http.Request) erro
 func (f *fakeSessionStore) ClearSignOutKey(req *http.Request, signOutKey string) error {
 	return nil
 }
+
+func (f *fakeSessionStore) AddSignedOutUser(req *http.Request, s *sessionsapi.SignedOutState) error {
+	return nil
+}
+
+func (f *fakeSessionStore) LoadSignedOutUser(req *http.Request, sub string) (*sessionsapi.SignedOutState, error) {
+	return nil, fmt.Errorf("fake")
+}

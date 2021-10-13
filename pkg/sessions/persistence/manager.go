@@ -1,12 +1,14 @@
 package persistence
 
 import (
+	"crypto/aes"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
+	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/encryption"
 )
 
 // Manager wraps a Store and handles the implementation details of the
@@ -91,8 +93,54 @@ func (m *Manager) Clear(rw http.ResponseWriter, req *http.Request) error {
 	})
 }
 
-// ClearSignOutKey clears all saved session information for a given sign out key
-// from redis, which may match zero, one, or more sessions
+// ClearSignOutKey clears saved session information for a given sign out key
+// from redis
 func (m *Manager) ClearSignOutKey(req *http.Request, signOutKey string) error {
 	return m.Store.Clear(req.Context(), signOutKey)
+}
+
+// AddSignedOutUser adds singed out user session into redis, which is used as
+// block list when authenticating the user later
+func (m *Manager) AddSignedOutUser(req *http.Request, s *sessions.SignedOutState) error {
+	key := fmt.Sprintf("%s-nbf-%s", m.Options.Name, s.Sub)
+
+	secret := make([]byte, aes.BlockSize)
+	copy(secret, m.Options.Name)
+
+	c, err := encryption.NewGCMCipher(secret)
+	if err != nil {
+		return fmt.Errorf("failed to make an AES-GCM cipher from the secret: %v", err)
+	}
+
+	ciphertext, err := s.EncodeSignedOutState(c, false)
+	if err != nil {
+		return fmt.Errorf("failed to encode signed out state: %v", err)
+	}
+
+	return m.Store.Save(req.Context(), key, ciphertext, m.Options.Expire)
+}
+
+// LoadSignedOutUser loads the signed out user session from redis
+func (m *Manager) LoadSignedOutUser(req *http.Request, sub string) (*sessions.SignedOutState, error) {
+	key := fmt.Sprintf("%s-nbf-%s", m.Options.Name, sub)
+
+	val, err := m.Store.Load(req.Context(), key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signed out state: %v", err)
+	}
+
+	secret := make([]byte, aes.BlockSize)
+	copy(secret, m.Options.Name)
+
+	c, err := encryption.NewGCMCipher(secret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make an AES-GCM cipher from the secret: %v", err)
+	}
+
+	s, err := sessions.DecodeSignedOutState(val, c, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode signed out state: %v", err)
+	}
+
+	return s, nil
 }

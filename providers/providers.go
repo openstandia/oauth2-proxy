@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 )
@@ -19,7 +20,7 @@ type Provider interface {
 	ValidateSession(ctx context.Context, s *sessions.SessionState) bool
 	RefreshSession(ctx context.Context, s *sessions.SessionState) (bool, error)
 	CreateSessionFromToken(ctx context.Context, token string) (*sessions.SessionState, error)
-	GetBackchannelSignOutKey(req *http.Request) (string, error)
+	ValidateLogoutToken(req *http.Request) (string, string, *time.Time, error)
 }
 
 // New provides a new Provider based on the configured provider string
