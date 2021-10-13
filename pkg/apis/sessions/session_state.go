@@ -33,6 +33,8 @@ type SessionState struct {
 	// Internal helpers, not serialized
 	Clock clock.Clock `msgpack:"-"`
 	Lock  Lock        `msgpack:"-"`
+
+	SessionID string `msgpack:"-"`
 }
 
 func (s *SessionState) ObtainLock(ctx context.Context, expiration time.Duration) error {

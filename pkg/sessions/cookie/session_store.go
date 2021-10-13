@@ -82,6 +82,12 @@ func (s *SessionStore) Clear(rw http.ResponseWriter, req *http.Request) error {
 	return nil
 }
 
+// The cookie session store does not support single sign out, and always
+// returns an error to the caller
+func (s *SessionStore) ClearSignOutKey(req *http.Request, signOutKey string) error {
+	return errors.New("cookie session store does not support single sign out")
+}
+
 // cookieForSession serializes a session state for storage in a cookie
 func (s *SessionStore) cookieForSession(ss *sessions.SessionState) ([]byte, error) {
 	if s.Minimal && (ss.AccessToken != "" || ss.IDToken != "" || ss.RefreshToken != "") {

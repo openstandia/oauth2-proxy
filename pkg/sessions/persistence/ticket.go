@@ -45,13 +45,19 @@ type ticket struct {
 
 // newTicket creates a new ticket. The ID & secret will be randomly created
 // with 16 byte sizes. The ID will be prefixed & hex encoded.
-func newTicket(cookieOpts *options.Cookie) (*ticket, error) {
-	rawID := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, rawID); err != nil {
-		return nil, fmt.Errorf("failed to create new ticket ID: %v", err)
+func newTicket(cookieOpts *options.Cookie, s *sessions.SessionState) (*ticket, error) {
+	var ticketID string
+	if s.SessionID == "" {
+		rawID := make([]byte, 16)
+		if _, err := io.ReadFull(rand.Reader, rawID); err != nil {
+			return nil, fmt.Errorf("failed to create new ticket ID: %v", err)
+		}
+		// ticketID is hex encoded
+		ticketID = fmt.Sprintf("%s-%s", cookieOpts.Name, hex.EncodeToString(rawID))
+	} else {
+		// TODO: Need to hash?
+		ticketID = fmt.Sprintf("%s-%s", cookieOpts.Name, s.SessionID)
 	}
-	// ticketID is hex encoded
-	ticketID := fmt.Sprintf("%s-%s", cookieOpts.Name, hex.EncodeToString(rawID))
 
 	secret := make([]byte, aes.BlockSize)
 	if _, err := io.ReadFull(rand.Reader, secret); err != nil {

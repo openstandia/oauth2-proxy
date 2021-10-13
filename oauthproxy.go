@@ -41,13 +41,14 @@ const (
 	schemeHTTPS     = "https"
 	applicationJSON = "application/json"
 
-	robotsPath        = "/robots.txt"
-	signInPath        = "/sign_in"
-	signOutPath       = "/sign_out"
-	oauthStartPath    = "/start"
-	oauthCallbackPath = "/callback"
-	authOnlyPath      = "/auth"
-	userInfoPath      = "/userinfo"
+	robotsPath             = "/robots.txt"
+	signInPath             = "/sign_in"
+	signOutPath            = "/sign_out"
+	backchannelSignOutPath = "/backchannel_sign_out"
+	oauthStartPath         = "/start"
+	oauthCallbackPath      = "/callback"
+	authOnlyPath           = "/auth"
+	userInfoPath           = "/userinfo"
 )
 
 var (
@@ -296,6 +297,7 @@ func (p *OAuthProxy) buildProxySubrouter(s *mux.Router) {
 
 	s.Path(signInPath).HandlerFunc(p.SignIn)
 	s.Path(signOutPath).HandlerFunc(p.SignOut)
+	s.Path(backchannelSignOutPath).HandlerFunc(p.BackchannelSignOut)
 	s.Path(oauthStartPath).HandlerFunc(p.OAuthStart)
 	s.Path(oauthCallbackPath).HandlerFunc(p.OAuthCallback)
 
@@ -659,6 +661,43 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	http.Redirect(rw, req, redirect, http.StatusFound)
+}
+
+// BackchannelSignOut invalidates persistent sessions on request from the IDP
+func (p *OAuthProxy) BackchannelSignOut(rw http.ResponseWriter, req *http.Request) {
+	// Set cache headers to prevent cached responses from interfering with
+	// future logout requests.
+	rw.Header().Set("Cache-Control", "no-cache, no-store")
+	rw.Header().Set("Pragma", "no-cache")
+
+	// Query our provider to extract the sign out key from the request body
+	signOutKey, err := p.provider.GetBackchannelSignOutKey(req)
+	if err != nil {
+		// If the request was invalid, return 400 Bad Request
+		logger.Errorf("Backchannel sign out request invalid: %v", err)
+		p.ErrorPage(rw, req, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ticketID := fmt.Sprintf("%s-%s", p.CookieOptions.Name, signOutKey)
+
+	// Attempt to perform the sign out in our session cache
+	err = p.BackchannelSignOutSession(req, ticketID)
+	if err != nil {
+		// If an error occurred during sign out, return 501 Not Implemented
+		logger.Errorf("Error performing backchannel sign out: %v", err)
+		p.ErrorPage(rw, req, http.StatusNotImplemented, err.Error())
+		return
+	}
+
+	// If sign out was successful, return 200 OK
+	rw.WriteHeader(http.StatusOK)
+}
+
+// BackchannelSignOutSession uses the sign out key in the backchannel request to
+// clear all matching sessions in the session store
+func (p *OAuthProxy) BackchannelSignOutSession(req *http.Request, signOutKey string) error {
+	return p.sessionStore.ClearSignOutKey(req, signOutKey)
 }
 
 // OAuthStart starts the OAuth2 authentication flow

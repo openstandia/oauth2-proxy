@@ -564,3 +564,7 @@ func (f *fakeSessionStore) Clear(rw http.ResponseWriter, req *http.Request) erro
 	}
 	return nil
 }
+
+func (f *fakeSessionStore) ClearSignOutKey(req *http.Request, signOutKey string) error {
+	return nil
+}

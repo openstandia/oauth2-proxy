@@ -70,6 +70,7 @@ type Options struct {
 	provider           providers.Provider
 	signatureData      *SignatureData
 	oidcVerifier       *oidc.IDTokenVerifier
+	oidcLogoutVerifier *oidc.IDTokenVerifier
 	jwtBearerVerifiers []*oidc.IDTokenVerifier
 	realClientIPParser ipapi.RealClientIPParser
 }
@@ -79,6 +80,7 @@ func (o *Options) GetRedirectURL() *url.URL                        { return o.re
 func (o *Options) GetProvider() providers.Provider                 { return o.provider }
 func (o *Options) GetSignatureData() *SignatureData                { return o.signatureData }
 func (o *Options) GetOIDCVerifier() *oidc.IDTokenVerifier          { return o.oidcVerifier }
+func (o *Options) GetOIDCLogoutVerifier() *oidc.IDTokenVerifier    { return o.oidcLogoutVerifier }
 func (o *Options) GetJWTBearerVerifiers() []*oidc.IDTokenVerifier  { return o.jwtBearerVerifiers }
 func (o *Options) GetRealClientIPParser() ipapi.RealClientIPParser { return o.realClientIPParser }
 
@@ -87,6 +89,7 @@ func (o *Options) SetRedirectURL(s *url.URL)                        { o.redirect
 func (o *Options) SetProvider(s providers.Provider)                 { o.provider = s }
 func (o *Options) SetSignatureData(s *SignatureData)                { o.signatureData = s }
 func (o *Options) SetOIDCVerifier(s *oidc.IDTokenVerifier)          { o.oidcVerifier = s }
+func (o *Options) SetOIDCLogoutVerifier(s *oidc.IDTokenVerifier)    { o.oidcLogoutVerifier = s }
 func (o *Options) SetJWTBearerVerifiers(s []*oidc.IDTokenVerifier)  { o.jwtBearerVerifiers = s }
 func (o *Options) SetRealClientIPParser(s ipapi.RealClientIPParser) { o.realClientIPParser = s }
 

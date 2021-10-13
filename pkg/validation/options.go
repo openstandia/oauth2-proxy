@@ -121,6 +121,11 @@ func Validate(o *options.Options) error {
 				ClientID:        o.Providers[0].ClientID,
 				SkipIssuerCheck: o.Providers[0].OIDCConfig.InsecureSkipIssuerVerification,
 			}))
+			o.SetOIDCLogoutVerifier(oidc.NewVerifier(o.Providers[0].OIDCConfig.IssuerURL, keySet, &oidc.Config{
+				ClientID:        o.Providers[0].ClientID,
+				SkipIssuerCheck: o.Providers[0].OIDCConfig.InsecureSkipIssuerVerification,
+				SkipExpiryCheck: true,
+			}))
 		} else {
 			// Configure discoverable provider data.
 			provider, err := oidc.NewProvider(ctx, o.Providers[0].OIDCConfig.IssuerURL)
@@ -130,6 +135,11 @@ func Validate(o *options.Options) error {
 			o.SetOIDCVerifier(provider.Verifier(&oidc.Config{
 				ClientID:        o.Providers[0].ClientID,
 				SkipIssuerCheck: o.Providers[0].OIDCConfig.InsecureSkipIssuerVerification,
+			}))
+			o.SetOIDCLogoutVerifier(provider.Verifier(&oidc.Config{
+				ClientID:        o.Providers[0].ClientID,
+				SkipIssuerCheck: o.Providers[0].OIDCConfig.InsecureSkipIssuerVerification,
+				SkipExpiryCheck: true,
 			}))
 
 			o.Providers[0].LoginURL = provider.Endpoint().AuthURL
@@ -216,6 +226,7 @@ func parseProviderInfo(o *options.Options, msgs []string) []string {
 	p.EmailClaim = o.Providers[0].OIDCConfig.EmailClaim
 	p.GroupsClaim = o.Providers[0].OIDCConfig.GroupsClaim
 	p.Verifier = o.GetOIDCVerifier()
+	p.LogoutTokenVerifier = o.GetOIDCLogoutVerifier()
 
 	// TODO (@NickMeves) - Remove This
 	// Backwards Compatibility for Deprecated UserIDClaim option

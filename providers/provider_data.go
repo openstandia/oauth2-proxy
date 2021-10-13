@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -45,6 +46,7 @@ type ProviderData struct {
 	EmailClaim           string
 	GroupsClaim          string
 	Verifier             *oidc.IDTokenVerifier
+	LogoutTokenVerifier  *oidc.IDTokenVerifier
 
 	// Universal Group authorization data structure
 	// any provider can set to consume
@@ -119,11 +121,13 @@ func defaultURL(u *url.URL, d *url.URL) *url.URL {
 
 // OIDCClaims is a struct to unmarshal the OIDC claims from an ID Token payload
 type OIDCClaims struct {
-	Subject  string   `json:"sub"`
-	Email    string   `json:"-"`
-	Groups   []string `json:"-"`
-	Verified *bool    `json:"email_verified"`
-	Nonce    string   `json:"nonce"`
+	Subject      string   `json:"sub"`
+	Email        string   `json:"-"`
+	Groups       []string `json:"-"`
+	Verified     *bool    `json:"email_verified"`
+	Nonce        string   `json:"nonce"`
+	SessionState string   `json:"session_state"`
+	Sid          string   `json:"sid"`
 
 	raw map[string]interface{}
 }
@@ -179,6 +183,9 @@ func (p *ProviderData) buildSessionFromClaims(idToken *oidc.IDToken) (*sessions.
 	if verifyEmail && claims.Verified != nil && !*claims.Verified {
 		return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.Email)
 	}
+
+	// Save sid into the session to create internal session id using OIDC's sid
+	ss.SessionID = claims.Sid
 
 	return ss, nil
 }
@@ -247,4 +254,45 @@ func (p *ProviderData) extractGroups(claims map[string]interface{}) []string {
 		groups = append(groups, formattedGroup)
 	}
 	return groups
+}
+
+func (p *ProviderData) getOIDCBackchannelSignOutKey(req *http.Request) (string, error) {
+	err := req.ParseForm()
+	if err != nil {
+		return "", fmt.Errorf("couldn't parse backchannel sign out request form: %v", err)
+	}
+
+	logoutTokenRaw := req.Form.Get("logout_token")
+	if logoutTokenRaw == "" {
+		return "", errors.New("logout_token form field not in backchannel sign out request")
+	}
+
+	if p.LogoutTokenVerifier == nil {
+		return "", ErrMissingOIDCVerifier
+	}
+
+	logoutToken, err := p.LogoutTokenVerifier.Verify(req.Context(), logoutTokenRaw)
+	if err != nil {
+		return "", fmt.Errorf("logout_token verification failed: %v", err)
+	}
+
+	// TODO verify logout token more
+	// https://openid.net/specs/openid-connect-backchannel-1_0.html#Validation
+
+	var claims struct {
+		Sid string `json:"sid"`
+	}
+	if err := logoutToken.Claims(&claims); err != nil {
+		return "", fmt.Errorf("logout_token unmarshaling failed: %v", err)
+	}
+
+	// If a session ID was provided, use that as the basis of the sign out key
+	// for this request
+	if claims.Sid != "" {
+		return claims.Sid, nil
+	}
+
+	// TODO How do we support sign out by "sub"?
+
+	return "", errors.New("logout token did not contain `sid` or `sub` claims")
 }

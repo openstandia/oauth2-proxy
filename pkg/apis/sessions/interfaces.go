@@ -12,6 +12,7 @@ type SessionStore interface {
 	Save(rw http.ResponseWriter, req *http.Request, s *SessionState) error
 	Load(req *http.Request) (*SessionState, error)
 	Clear(rw http.ResponseWriter, req *http.Request) error
+	ClearSignOutKey(req *http.Request, signOutKey string) error
 }
 
 var ErrLockNotObtained = errors.New("lock: not obtained")

@@ -35,7 +35,7 @@ func (m *Manager) Save(rw http.ResponseWriter, req *http.Request, s *sessions.Se
 
 	tckt, err := decodeTicketFromRequest(req, m.Options)
 	if err != nil {
-		tckt, err = newTicket(m.Options)
+		tckt, err = newTicket(m.Options, s)
 		if err != nil {
 			return fmt.Errorf("error creating a session ticket: %v", err)
 		}
@@ -89,4 +89,10 @@ func (m *Manager) Clear(rw http.ResponseWriter, req *http.Request) error {
 	return tckt.clearSession(func(key string) error {
 		return m.Store.Clear(req.Context(), key)
 	})
+}
+
+// ClearSignOutKey clears all saved session information for a given sign out key
+// from redis, which may match zero, one, or more sessions
+func (m *Manager) ClearSignOutKey(req *http.Request, signOutKey string) error {
+	return m.Store.Clear(req.Context(), signOutKey)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
@@ -140,4 +141,10 @@ func (p *ProviderData) CreateSessionFromToken(ctx context.Context, token string)
 		return middleware.CreateTokenToSessionFunc(p.Verifier.Verify)(ctx, token)
 	}
 	return nil, ErrNotImplemented
+}
+
+// GetBackchannelSignOutKey parses a backchannel request and extracts the sign out key
+// for single sign out
+func (p *ProviderData) GetBackchannelSignOutKey(req *http.Request) (string, error) {
+	return p.getOIDCBackchannelSignOutKey(req)
 }
