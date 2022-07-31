@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bitly/go-simplejson"
 	"github.com/justinas/alice"
 	middlewareapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
 	sessionsapi "github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
@@ -48,6 +49,9 @@ type StoredSessionLoaderOptions struct {
 	// If the sesssion is older than `RefreshPeriod` but the provider doesn't
 	// refresh it, we must re-validate using this validation.
 	ValidateSession func(context.Context, *sessionsapi.SessionState) bool
+
+	// Provider based token introspection
+	IntrospectToken func(token string) (*simplejson.Json, error)
 }
 
 // NewStoredSessionLoader creates a new storedSessionLoader which loads
@@ -56,10 +60,11 @@ type StoredSessionLoaderOptions struct {
 // If a session was loader by a previous handler, it will not be replaced.
 func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor {
 	ss := &storedSessionLoader{
-		store:            opts.SessionStore,
-		refreshPeriod:    opts.RefreshPeriod,
-		sessionRefresher: opts.RefreshSession,
-		sessionValidator: opts.ValidateSession,
+		store:             opts.SessionStore,
+		refreshPeriod:     opts.RefreshPeriod,
+		sessionRefresher:  opts.RefreshSession,
+		sessionValidator:  opts.ValidateSession,
+		tokenIntrospector: opts.IntrospectToken,
 	}
 	return ss.loadSession
 }
@@ -67,10 +72,11 @@ func NewStoredSessionLoader(opts *StoredSessionLoaderOptions) alice.Constructor 
 // storedSessionLoader is responsible for loading sessions from cookie
 // identified sessions in the session store.
 type storedSessionLoader struct {
-	store            sessionsapi.SessionStore
-	refreshPeriod    time.Duration
-	sessionRefresher func(context.Context, *sessionsapi.SessionState) (bool, error)
-	sessionValidator func(context.Context, *sessionsapi.SessionState) bool
+	store             sessionsapi.SessionStore
+	refreshPeriod     time.Duration
+	sessionRefresher  func(context.Context, *sessionsapi.SessionState) (bool, error)
+	sessionValidator  func(context.Context, *sessionsapi.SessionState) bool
+	tokenIntrospector func(token string) (*simplejson.Json, error)
 }
 
 // loadSession attempts to load a session as identified by the request cookies.
@@ -126,8 +132,15 @@ func (s *storedSessionLoader) getValidatedSession(rw http.ResponseWriter, req *h
 // Success or fail, we will then validate the session.
 func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req *http.Request, session *sessionsapi.SessionState) error {
 	if !needsRefresh(s.refreshPeriod, session) {
-		// Refresh is disabled or the session is not old enough, do nothing
-		return nil
+		if s.tokenIntrospector != nil {
+			if _, err := s.tokenIntrospector(session.AccessToken); err == nil {
+				// Token is validated by the introspection endpoint, do nothing
+				return nil
+			}
+		} else {
+			// Refresh is disabled or the session is not old enough, do nothing
+			return nil
+		}
 	}
 
 	var lockObtained bool
@@ -180,9 +193,17 @@ func (s *storedSessionLoader) refreshSessionIfNeeded(rw http.ResponseWriter, req
 	session.Lock = lock
 
 	if !needsRefresh(s.refreshPeriod, session) {
-		// The session must have already been refreshed while we were waiting to
-		// obtain the lock.
-		return nil
+		if s.tokenIntrospector != nil {
+			if _, err := s.tokenIntrospector(session.AccessToken); err == nil {
+				// The session must have already been refreshed while we were waiting to
+				// obtain the lock.
+				return nil
+			}
+		} else {
+			// The session must have already been refreshed while we were waiting to
+			// obtain the lock.
+			return nil
+		}
 	}
 
 	// We are holding the lock and the session needs a refresh
@@ -248,6 +269,12 @@ func (s *storedSessionLoader) validateSession(ctx context.Context, session *sess
 
 	if !s.sessionValidator(ctx, session) {
 		return errors.New("session is invalid")
+	}
+
+	if s.tokenIntrospector != nil {
+		if _, err := s.tokenIntrospector(session.AccessToken); err != nil {
+			return errors.New("session is invalid")
+		}
 	}
 
 	return nil

@@ -195,7 +195,7 @@ func (p *OIDCProvider) CreateSessionFromToken(ctx context.Context, token string)
 // CreateSessionFromIntrospectedToken converts Bearer Tokens into sessions after valified using introspection endpoint
 func (p *OIDCProvider) CreateSessionFromIntrospectedToken(ctx context.Context, token string) (*sessions.SessionState, error) {
 
-	_, err := p.introspectToken(token)
+	_, err := p.IntrospectToken(token)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (p *OIDCProvider) createSession(ctx context.Context, token *oauth2.Token, r
 	return ss, nil
 }
 
-func (p *OIDCProvider) introspectToken(token string) (*simplejson.Json, error) {
+func (p *OIDCProvider) IntrospectToken(token string) (*simplejson.Json, error) {
 	body := url.Values{}
 	body.Add("token", token)
 

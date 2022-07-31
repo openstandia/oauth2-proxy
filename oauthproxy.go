@@ -378,12 +378,22 @@ func buildSessionChain(opts *options.Options, provider providers.Provider, sessi
 		chain = chain.Append(middleware.NewBasicAuthSessionLoader(validator, opts.HtpasswdUserGroups, opts.LegacyPreferEmailToUser))
 	}
 
-	chain = chain.Append(middleware.NewStoredSessionLoader(&middleware.StoredSessionLoaderOptions{
-		SessionStore:    sessionStore,
-		RefreshPeriod:   opts.Cookie.Refresh,
-		RefreshSession:  provider.RefreshSession,
-		ValidateSession: provider.ValidateSession,
-	}))
+	if opts.IntrospectToken {
+		chain = chain.Append(middleware.NewStoredSessionLoader(&middleware.StoredSessionLoaderOptions{
+			SessionStore:    sessionStore,
+			RefreshPeriod:   opts.Cookie.Refresh,
+			RefreshSession:  provider.RefreshSession,
+			ValidateSession: provider.ValidateSession,
+			IntrospectToken: provider.IntrospectToken,
+		}))
+	} else {
+		chain = chain.Append(middleware.NewStoredSessionLoader(&middleware.StoredSessionLoaderOptions{
+			SessionStore:    sessionStore,
+			RefreshPeriod:   opts.Cookie.Refresh,
+			RefreshSession:  provider.RefreshSession,
+			ValidateSession: provider.ValidateSession,
+		}))
+	}
 
 	return chain
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/bitly/go-simplejson"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/middleware"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/requests"
@@ -149,5 +150,10 @@ func (p *ProviderData) CreateSessionFromToken(ctx context.Context, token string)
 
 // CreateSessionFromIntrospectedToken converts Bearer Tokens into sessions after valified using introspection endpoint
 func (p *ProviderData) CreateSessionFromIntrospectedToken(ctx context.Context, token string) (*sessions.SessionState, error) {
+	return nil, ErrNotImplemented
+}
+
+// IntrospectToken introspect tokens
+func (p *ProviderData) IntrospectToken(token string) (*simplejson.Json, error) {
 	return nil, ErrNotImplemented
 }

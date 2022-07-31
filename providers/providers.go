@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/bitly/go-simplejson"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/options"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/apis/sessions"
 	"github.com/oauth2-proxy/oauth2-proxy/v7/pkg/logger"
@@ -30,6 +31,7 @@ type Provider interface {
 	RefreshSession(ctx context.Context, s *sessions.SessionState) (bool, error)
 	CreateSessionFromToken(ctx context.Context, token string) (*sessions.SessionState, error)
 	CreateSessionFromIntrospectedToken(ctx context.Context, token string) (*sessions.SessionState, error)
+	IntrospectToken(token string) (*simplejson.Json, error)
 }
 
 func NewProvider(providerConfig options.Provider) (Provider, error) {
